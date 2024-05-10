@@ -56,21 +56,23 @@ func createEvent(schedule []Schedule) {
 		log.Fatalf("Failed to create Calendar service: %v", err)
 	}
 	for _, item := range schedule {
-		event := &calendar.Event{
-			Summary: item.Class,
-			Start: &calendar.EventDateTime{
-				DateTime: item.Start,
-				TimeZone: "Europe/Samara",
-			},
-			End: &calendar.EventDateTime{
-				DateTime: item.End,
-				TimeZone: "Europe/Samara",
-			},
+		if item.Class != "" {
+			event := &calendar.Event{
+				Summary: item.Class,
+				Start: &calendar.EventDateTime{
+					DateTime: item.Start,
+					TimeZone: "Europe/Samara",
+				},
+				End: &calendar.EventDateTime{
+					DateTime: item.End,
+					TimeZone: "Europe/Samara",
+				},
+			}
+			event, err = srv.Events.Insert(calendarID, event).Do()
+			if err != nil {
+				log.Fatalf("Error creating event: %v", err)
+			}
+			fmt.Printf("Event created: %s\n", event.HtmlLink)
 		}
-		event, err = srv.Events.Insert(calendarID, event).Do()
-		if err != nil {
-			log.Fatalf("Error creating event: %v", err)
-		}
-		fmt.Printf("Event created: %s\n", event.HtmlLink)
 	}
 }
