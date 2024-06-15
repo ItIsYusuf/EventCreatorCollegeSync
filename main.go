@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+	pb "createEvents/proto"
 	"fmt"
 	"google.golang.org/api/calendar/v3"
 	"google.golang.org/api/option"
-	"io"
+	"google.golang.org/grpc"
 	"log"
-	"net/http"
+	"net"
 )
 
 type Schedule struct {
@@ -19,31 +19,34 @@ type Schedule struct {
 
 var schedule []Schedule
 
-func main() {
-	http.HandleFunc("/createEvents", handleJson)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+type server struct {
+	pb.UnimplementedParserServer
 }
 
-func handleJson(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Error", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"success"}`))
-	err = json.Unmarshal(body, &schedule)
-	if err != nil {
-		log.Fatalf("Error parsing JSON: %s", err)
+func (s *server) SendSchedule(ctx context.Context, req *pb.ScheduleRequest) (*pb.ScheduleResponse, error) {
+	for _, entry := range req.Entries {
+		fmt.Printf("Received schedule entry: Start=%s, End=%s, ClassName=%s\n", entry.Start, entry.End, entry.ClassName)
+		schedule = append(schedule, Schedule{
+			Start: entry.Start,
+			End:   entry.End,
+			Class: entry.ClassName,
+		})
 	}
 	createEvent(schedule)
+	return &pb.ScheduleResponse{Status: "OK"}, nil
+}
+
+func main() {
+	lis, err := net.Listen("tcp", ":50051")
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+	s := grpc.NewServer()
+	pb.RegisterParserServer(s, &server{})
+	log.Printf("server listening at %v", lis.Addr())
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
 }
 
 func createEvent(schedule []Schedule) {
